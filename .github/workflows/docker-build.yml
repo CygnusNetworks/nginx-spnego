@@ -11,8 +11,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  # Docker Hub image will be <username>/<repo-name> (all lower-case as required by Docker Hub)
-  DOCKERHUB_IMAGE: ${{ toLower(format('{0}/{1}', secrets.DOCKER_USERNAME, github.event.repository.name)) }}
+  # Docker Hub image will be <username>/<repo-name>
+  # Note: Docker Hub requires lowercase; we compute it in a step and export to GITHUB_ENV
 
 jobs:
   build-and-push:
@@ -24,6 +24,17 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Compute Docker Hub image name (lowercase)
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        run: |
+          set -euo pipefail
+          # Lowercase Docker Hub username and repo name
+          uname_lc=$(printf "%s" "$DOCKER_USERNAME" | tr '[:upper:]' '[:lower:]')
+          repo_name=${GITHUB_REPOSITORY#*/}
+          repo_lc=$(printf "%s" "$repo_name" | tr '[:upper:]' '[:lower:]')
+          echo "DOCKERHUB_IMAGE=${uname_lc}/${repo_lc}" >> "$GITHUB_ENV"
 
       - name: Update Docker Hub README
         uses: peter-evans/dockerhub-description@v3
