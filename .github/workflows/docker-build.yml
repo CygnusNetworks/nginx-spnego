@@ -34,7 +34,7 @@ jobs:
           uname_lc=$(printf "%s" "$DOCKER_USERNAME" | tr '[:upper:]' '[:lower:]')
           repo_name=${GITHUB_REPOSITORY#*/}
           repo_lc=$(printf "%s" "$repo_name" | tr '[:upper:]' '[:lower:]')
-          echo "DOCKERHUB_IMAGE=${uname_lc}/${repo_lc}" >> "$GITHUB_ENV"
+          echo "DOCKERHUB_IMAGE=cygnusbn/${repo_lc}" >> "$GITHUB_ENV"
 
       - name: Update Docker Hub README
         uses: peter-evans/dockerhub-description@v3
