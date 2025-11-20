@@ -39,9 +39,9 @@ Note: You can rebuild the image yourself with a different NGINX base by setting 
 1) Pull the image
 
 ```
-docker pull ghcr.io/<owner>/<repo>:latest
+docker pull ghcr.io/CygnusNetworks/nginx-spnego:latest
 # or Docker Hub (if published):
-docker pull <dockerhub_user>/<repo>:latest
+docker pull cygnusbn/nginx-spnego:latest
 ```
 
 2) Load the SPNEGO module in your `nginx.conf` and configure auth
@@ -85,14 +85,6 @@ docker run \
 ```
 
 Refer to the SPNEGO module documentation for additional directives such as `auth_gss_service_name`, `auth_gss_force_realm`, etc.
-
-#### Building locally with a custom NGINX version
-
-```
-docker build \
-  --build-arg NGINX_VERSION=1.27.2-alpine \
-  -t my-nginx-spnego:1.27.2 .
-```
 
 #### CI and publishing
 
