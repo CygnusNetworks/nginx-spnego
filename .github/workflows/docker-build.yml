@@ -12,22 +12,8 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
-jobs:
-  check-base-image:
-    runs-on: ubuntu-latest
-    outputs:
-      should_build: ${{ steps.check.outputs.changed }}
-    steps:
-      - id: check
-        uses: technote-space/docker-image-update-check-action@v2
-        with:
-          DOCKERFILE: Dockerfile
-          IMAGE_NAME: chocolatefrappe/nginx-modules
-          IMAGE_TAG: ${{ env.NGINX_VERSION || 'stable-alpine' }}-auth-spnego
-          
+jobs:     
   build-and-push:
-    needs: check-base-image
-    if: needs.check-base-image.outputs.should_build == 'true'  
     runs-on: ubuntu-latest
     permissions:
       contents: read
