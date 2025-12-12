@@ -24,7 +24,7 @@ jobs:
 
       - name: Check if update available
         id: check
-        uses: lucacome/docker-image-update-checker@v3.0.0
+        uses: lucacome/docker-image-update-checker@v3.0.1
         with:
           base-image: nginx:stable-alpine
           image: cygnusnetworks/nginx-spnego:latest
