@@ -13,22 +13,6 @@ This image builds on the chocolatefrappe/nginx-modules base image, which supplie
 - Adds the SPNEGO auth module from `chocolatefrappe/nginx-modules` (`-auth-spnego` variant)
 - Installs the module(s) as Alpine packages during build
 
-The key lines from the `Dockerfile`:
-
-```
-ARG NGINX_VERSION=stable-alpine
-FROM chocolatefrappe/nginx-modules:${NGINX_VERSION}-auth-spnego AS mod-auth-spnego
-FROM nginx:${NGINX_VERSION}
-COPY --from=mod-auth-spnego / /tmp/nginx-modules
-RUN set -ex \
-  && cd /tmp/nginx-modules \
-  && for mod in module-available.d/*; do \
-       module=$(basename $mod); \
-       apk add --no-cache --allow-untrusted packages/nginx-module-${module}-${NGINX_VERSION}*.apk; \
-     done \
-  && rm -rf /tmp/nginx-modules
-```
-
 #### Supported tags
 - `latest` (tracks the default `ARG NGINX_VERSION=stable-alpine`)
 - Version tags that mirror repo tags `v*` in this repository (see GitHub Releases)
@@ -41,7 +25,7 @@ Note: You can rebuild the image yourself with a different NGINX base by setting 
 ```
 docker pull ghcr.io/CygnusNetworks/nginx-spnego:latest
 # or Docker Hub (if published):
-docker pull cygnusbn/nginx-spnego:latest
+docker pull cygnusnetworks/nginx-spnego:latest
 ```
 
 2) Load the SPNEGO module in your `nginx.conf` and configure auth
@@ -81,7 +65,7 @@ docker run \
   -v $(pwd)/krb5.conf:/etc/krb5.conf:ro \
   -v $(pwd)/krb5.keytab:/etc/nginx/krb5.keytab:ro \
   -v $(pwd)/nginx.conf:/etc/nginx/nginx.conf:ro \
-  ghcr.io/<owner>/<repo>:latest
+  cygnusnetworks/nginx-spnego:latest
 ```
 
 Refer to the SPNEGO module documentation for additional directives such as `auth_gss_service_name`, `auth_gss_force_realm`, etc.
