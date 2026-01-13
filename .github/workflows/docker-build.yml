@@ -26,7 +26,7 @@ jobs:
         id: check
         uses: lucacome/docker-image-update-checker@v3.0.1
         with:
-          base-image: nginx:stable-alpine
+          base-image: chocolatefrappe/nginx-modules:stable-alpine-auth-spnego
           image: cygnusnetworks/nginx-spnego:latest
           platforms: linux/amd64,linux/arm64
           
@@ -42,6 +42,23 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Extract nginx version from module image
+        id: nginx-version
+        run: |
+          set -euo pipefail
+          # Create a temporary container from the module image and extract package info
+          container_id=$(docker create chocolatefrappe/nginx-modules:stable-alpine-auth-spnego)
+          docker cp "$container_id:/packages" /tmp/nginx-modules-packages
+          docker rm "$container_id"
+
+          # Extract version from package filename (e.g., nginx-module-auth-spnego-1.28.0.1.1.2-r1.apk -> 1.28.0)
+          pkg_file=$(ls /tmp/nginx-modules-packages/nginx-module-auth-spnego-[0-9]*.apk | head -1)
+          pkg_name=$(basename "$pkg_file")
+          # Extract the nginx version (first 3 version components: X.Y.Z)
+          nginx_version=$(echo "$pkg_name" | sed -E 's/nginx-module-auth-spnego-([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          echo "Detected nginx version: $nginx_version"
+          echo "version=${nginx_version}" >> "$GITHUB_OUTPUT"
 
       - name: Compute Docker Hub image name (lowercase)
         env:
@@ -93,4 +110,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            NGINX_VERSION=${{ steps.nginx-version.outputs.version }}-alpine
 
