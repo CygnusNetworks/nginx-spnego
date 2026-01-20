@@ -48,7 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           # Create a temporary container from the module image and extract package info
-          container_id=$(docker create chocolatefrappe/nginx-modules:stable-alpine-auth-spnego)
+          container_id=$(docker create chocolatefrappe/nginx-modules:stable-alpine-auth-spnego sh -c 'exit 0')
           docker cp "$container_id:/packages" /tmp/nginx-modules-packages
           docker rm "$container_id"
 
