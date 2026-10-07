@@ -2,28 +2,30 @@
 
 Container image providing NGINX with the SPNEGO/Kerberos authentication module preinstalled.
 
-This image builds on the chocolatefrappe/nginx-modules base image, which supplies prebuilt dynamic NGINX modules as Alpine packages. We copy the module artifacts from that image and install them into an `nginx` base image so you can `load_module` and use SPNEGO auth in your own NGINX configuration.
-
-- Base modules image: `chocolatefrappe/nginx-modules`
-  - Docker Hub: https://hub.docker.com/r/chocolatefrappe/nginx-modules
-  - Source: https://github.com/chocolatefrappe/docker-nginx-modules
+The image builds the SPNEGO module directly from [its source](https://github.com/stnoonan/spnego-http-auth-nginx-module) against the NGINX version in the official `nginx:stable-alpine` image. It does not use a prebuilt module image or package. Both build stages use the same NGINX base image so the dynamic module matches the NGINX binary in the final image.
 
 #### What’s inside
-- Base: `nginx:${NGINX_VERSION}` (default: `stable-alpine`)
-- Adds the SPNEGO auth module from `chocolatefrappe/nginx-modules` (`-auth-spnego` variant)
-- Installs the module(s) as Alpine packages during build
+- Base: official `nginx:stable-alpine`
+- SPNEGO dynamic module compiled from the latest upstream release
+- Kerberos runtime libraries; build tools and source code are excluded from the final image
 
 #### Supported tags
-- `latest` (uses the newest NGINX version supported by the current SPNEGO module package)
+- `latest` (rebuilt daily from the current stable Alpine NGINX image and latest SPNEGO release)
 
-Note: You can rebuild the image yourself with a different NGINX base by setting the build argument `NGINX_VERSION`, e.g. `1.27.2-alpine` or `stable-alpine`.
+To build locally, run `docker build -t nginx-spnego:local .`. The defaults use `nginx:stable-alpine` and the SPNEGO v1.1.3 source commit. To choose another compatible base or source revision, set `NGINX_IMAGE` and `SPNEGO_COMMIT`, for example:
+
+```
+docker build --build-arg NGINX_IMAGE=nginx:1.30.5-alpine \
+  --build-arg SPNEGO_COMMIT=005723a3f5cadcf2da6ebbde8caad758555da11b \
+  -t nginx-spnego:local .
+```
 
 #### How to use
 1) Pull the image
 
 ```
-docker pull ghcr.io/CygnusNetworks/nginx-spnego:latest
-# or Docker Hub (if published):
+docker pull ghcr.io/cygnusnetworks/nginx-spnego:latest
+# or Docker Hub:
 docker pull cygnusnetworks/nginx-spnego:latest
 ```
 
@@ -73,9 +75,10 @@ Refer to the SPNEGO module documentation for additional directives such as `auth
 
 This repository includes a GitHub Actions workflow that:
 - Updates the Docker Hub description from this `README.md`
-- Builds and publishes the image daily at 03:17 UTC to GitHub Container Registry and Docker Hub, including updates to the NGINX base image and the module packages
+- Resolves the latest SPNEGO release to a source commit, then builds and publishes the image daily at 03:17 UTC to GitHub Container Registry and Docker Hub
+- Builds for `linux/amd64` and `linux/arm64` and checks that NGINX can load the compiled module before publishing
 - Adds an empty keepalive commit after 45 days without repository commits so GitHub does not disable scheduled builds for inactivity
 - Publishes the `latest` tag
 
 #### Credits
-Huge thanks to the `chocolatefrappe/nginx-modules` project for providing the prebuilt NGINX modules used here.
+Thanks to the [SPNEGO module maintainers](https://github.com/stnoonan/spnego-http-auth-nginx-module) and the [NGINX project](https://nginx.org/) for the upstream sources.

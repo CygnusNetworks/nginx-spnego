@@ -21,23 +21,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract nginx version from module image
-        id: nginx-version
+      - name: Resolve latest SPNEGO release
+        id: spnego
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Create a temporary container from the module image and extract package info
-          container_id=$(docker create chocolatefrappe/nginx-modules:stable-alpine-auth-spnego sh -c 'exit 0')
-          docker cp "$container_id:/packages" /tmp/nginx-modules-packages
-          docker rm "$container_id"
-
-          # Extract version from package filename (e.g., nginx-module-auth-spnego-1.28.0.1.1.2-r1.apk -> 1.28.0)
-          pkg_file=$(find /tmp/nginx-modules-packages -maxdepth 1 -type f -name 'nginx-module-auth-spnego-[0-9]*.apk' -print -quit)
-          test -n "$pkg_file"
-          pkg_name=$(basename "$pkg_file")
-          # Extract the nginx version (first 3 version components: X.Y.Z)
-          nginx_version=$(echo "$pkg_name" | sed -E 's/nginx-module-auth-spnego-([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
-          echo "Detected nginx version: $nginx_version"
-          echo "version=${nginx_version}" >> "$GITHUB_OUTPUT"
+          release=$(gh api repos/stnoonan/spnego-http-auth-nginx-module/releases/latest --jq .tag_name)
+          commit=$(gh api "repos/stnoonan/spnego-http-auth-nginx-module/commits/$release" --jq .sha)
+          echo "Building SPNEGO $release ($commit)"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
 
       - name: Compute Docker Hub image name (lowercase)
         env:
@@ -89,7 +82,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            NGINX_VERSION=${{ steps.nginx-version.outputs.version }}-alpine
+            SPNEGO_COMMIT=${{ steps.spnego.outputs.commit }}
 
   keep-schedule-active:
     if: github.event_name == 'schedule'
