@@ -14,8 +14,7 @@ This image builds on the chocolatefrappe/nginx-modules base image, which supplie
 - Installs the module(s) as Alpine packages during build
 
 #### Supported tags
-- `latest` (tracks the default `ARG NGINX_VERSION=stable-alpine`)
-- Version tags that mirror repo tags `v*` in this repository (see GitHub Releases)
+- `latest` (uses the newest NGINX version supported by the current SPNEGO module package)
 
 Note: You can rebuild the image yourself with a different NGINX base by setting the build argument `NGINX_VERSION`, e.g. `1.27.2-alpine` or `stable-alpine`.
 
@@ -74,8 +73,9 @@ Refer to the SPNEGO module documentation for additional directives such as `auth
 
 This repository includes a GitHub Actions workflow that:
 - Updates the Docker Hub description from this `README.md`
-- Builds and publishes the image to GitHub Container Registry and Docker Hub
-- Produces tags: `latest` and any `v*` tag pushed to the repo
+- Builds and publishes the image daily at 03:17 UTC to GitHub Container Registry and Docker Hub, including updates to the NGINX base image and the module packages
+- Adds an empty keepalive commit after 45 days without repository commits so GitHub does not disable scheduled builds for inactivity
+- Publishes the `latest` tag
 
 #### Credits
 Huge thanks to the `chocolatefrappe/nginx-modules` project for providing the prebuilt NGINX modules used here.
