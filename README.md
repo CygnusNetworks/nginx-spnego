@@ -10,7 +10,9 @@ The image builds the SPNEGO module directly from [its source](https://github.com
 - Kerberos runtime libraries; build tools and source code are excluded from the final image
 
 #### Supported tags
-- `latest` and `stable` point to the same image. A daily check publishes a new build only when the official `nginx:stable-alpine` image digest or latest SPNEGO release changes. A missing or stale `stable` tag is updated from `latest` without rebuilding.
+- `latest` and `stable` point to the same image. A daily check publishes a new build when the official `nginx:stable-alpine` image digest, the latest SPNEGO release or this repository's build recipe changes, and at least every 30 days to pick up Alpine package updates. A missing or stale `stable` tag is updated from `latest` without rebuilding.
+
+The NGINX source tarball is checked against its PGP signature. The build accepts only the release signing keys listed on [nginx.org](https://nginx.org/en/pgp_keys.html), pinned by fingerprint in the `Dockerfile`; if a new NGINX developer starts signing releases, add their key name and fingerprint to `NGINX_PGP_KEYS` and `NGINX_PGP_FINGERPRINTS`.
 
 To build locally, run `docker build -t nginx-spnego:local .`. The defaults use `nginx:stable-alpine` and the SPNEGO v1.1.3 source commit. To choose another compatible base or source revision, set `NGINX_IMAGE` and `SPNEGO_COMMIT`, for example:
 
@@ -76,14 +78,16 @@ Refer to the SPNEGO module documentation for additional directives such as `auth
 
 #### CI and publishing
 
-This repository includes a GitHub Actions workflow that:
-- Updates the Docker Hub description from this `README.md`
-- Checks the official `nginx:stable-alpine` image digest and latest SPNEGO release daily at 03:17 UTC; rebuilds and publishes to GitHub Container Registry and Docker Hub only when either upstream changes (or a `latest` tag is missing)
-- Records the NGINX base digest and SPNEGO source commit as image labels so subsequent checks can detect changes
-- Builds for `linux/amd64` and `linux/arm64` and checks that NGINX can load the compiled module before publishing
-- Adds an empty keepalive commit after 45 days without repository commits so GitHub does not disable scheduled builds for inactivity
-- Publishes the `latest` and `stable` tags for the same image; repairs a missing or outdated `stable` tag without rebuilding
-- Allows a manual rebuild via **Run workflow** with the `force` input, for example after changing the Dockerfile without an upstream update
+This repository includes GitHub Actions workflows that:
+- Update the Docker Hub description from this `README.md`
+- Lint and test the publishing scripts and build the image without publishing on every pull request and push to `main`
+- Check the official `nginx:stable-alpine` image digest and latest SPNEGO release daily at 03:17 UTC; rebuild and publish to GitHub Container Registry and Docker Hub only when either upstream changes, the `Dockerfile` or build workflow changes, the published image is older than 30 days, or a `latest` tag is missing
+- Run the same check right away when a change to the `Dockerfile` or build workflow is pushed to `main`
+- Record the NGINX base digest (`org.opencontainers.image.base.digest`), SPNEGO source commit and a hash of the build recipe as image labels so subsequent checks can detect changes
+- Build for `linux/amd64` and `linux/arm64` and check that NGINX can load the compiled module before publishing
+- Re-enable the build workflow through the GitHub API on every scheduled run so GitHub does not disable scheduled builds for inactivity
+- Publish the `latest` and `stable` tags for the same image; repair a missing or outdated `stable` tag without rebuilding
+- Allow a manual rebuild via **Run workflow** with the `force` input
 
 #### Credits
 Thanks to the [SPNEGO module maintainers](https://github.com/stnoonan/spnego-http-auth-nginx-module) and the [NGINX project](https://nginx.org/) for the upstream sources.

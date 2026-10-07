@@ -4,11 +4,20 @@ on:
   workflow_dispatch:
     inputs:
       force:
-        description: Rebuild even if the upstream images and release are unchanged
+        description: Rebuild even if the upstream images, release and build recipe are unchanged
         type: boolean
         default: false
   schedule:
     - cron: '17 3 * * *'
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - .github/workflows/docker-build.yml
+
+concurrency:
+  group: docker-build
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
@@ -23,7 +32,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Resolve latest SPNEGO release
         id: spnego
@@ -42,29 +51,28 @@ jobs:
         run: bash scripts/registry-names.sh
 
       - name: Log in to the Container registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: docker.io
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Check upstream and published images
         id: decision
         env:
-          DOCKERHUB_IMAGE: docker.io/${{ env.DOCKERHUB_IMAGE }}
           SPNEGO_COMMIT: ${{ steps.spnego.outputs.commit }}
           FORCE_BUILD: ${{ inputs.force || 'false' }}
         run: |
@@ -74,39 +82,49 @@ jobs:
           }
 
           NGINX_DIGEST=$(docker buildx imagetools inspect nginx:stable-alpine --format '{{json .Manifest}}' | jq -er '.digest')
+          BUILD_RECIPE=$(cat Dockerfile .github/workflows/docker-build.yml | sha256sum | cut -d ' ' -f 1)
           GHCR_LATEST_DIGEST=$(image_digest "$GHCR_IMAGE:latest")
-          DOCKERHUB_LATEST_DIGEST=$(image_digest "$DOCKERHUB_IMAGE:latest")
+          DOCKERHUB_LATEST_DIGEST=$(image_digest "$DOCKERHUB_REF:latest")
           GHCR_STABLE_DIGEST=$(image_digest "$GHCR_IMAGE:stable")
-          DOCKERHUB_STABLE_DIGEST=$(image_digest "$DOCKERHUB_IMAGE:stable")
-          PUBLISHED_NGINX_DIGEST=
-          PUBLISHED_SPNEGO_COMMIT=
-          if [[ -n "$GHCR_LATEST_DIGEST" && -n "$DOCKERHUB_LATEST_DIGEST" ]]; then
-            docker pull --platform linux/amd64 "$GHCR_IMAGE:latest"
-            PUBLISHED_NGINX_DIGEST=$(docker image inspect "$GHCR_IMAGE:latest" --format '{{index .Config.Labels "org.cygnusnetworks.nginx-base-digest"}}')
-            PUBLISHED_SPNEGO_COMMIT=$(docker image inspect "$GHCR_IMAGE:latest" --format '{{index .Config.Labels "org.cygnusnetworks.spnego-source-revision"}}')
-          fi
+          DOCKERHUB_STABLE_DIGEST=$(image_digest "$DOCKERHUB_REF:stable")
 
-          echo "nginx_digest=$NGINX_DIGEST" >> "$GITHUB_OUTPUT"
-          export NGINX_DIGEST GHCR_LATEST_DIGEST DOCKERHUB_LATEST_DIGEST GHCR_STABLE_DIGEST DOCKERHUB_STABLE_DIGEST
-          export PUBLISHED_NGINX_DIGEST PUBLISHED_SPNEGO_COMMIT
+          labels='{}'
+          if [[ -n "$GHCR_LATEST_DIGEST" ]]; then
+            labels=$(docker buildx imagetools inspect "$GHCR_IMAGE:latest" --format '{{json .Image}}' | jq -c '."linux/amd64".config.Labels // {}')
+          fi
+          label() {
+            jq -r --arg key "$1" '.[$key] // ""' <<< "$labels"
+          }
+          PUBLISHED_NGINX_DIGEST=$(label org.opencontainers.image.base.digest)
+          PUBLISHED_SPNEGO_COMMIT=$(label org.cygnusnetworks.spnego-source-revision)
+          PUBLISHED_BUILD_RECIPE=$(label org.cygnusnetworks.build-recipe)
+          PUBLISHED_CREATED=$(label org.opencontainers.image.created)
+          PUBLISHED_CREATED_EPOCH=$(date -u -d "${PUBLISHED_CREATED:-@0}" +%s 2>/dev/null || echo 0)
+
+          {
+            echo "nginx_digest=$NGINX_DIGEST"
+            echo "build_recipe=$BUILD_RECIPE"
+          } >> "$GITHUB_OUTPUT"
+          echo "NGINX base: $NGINX_DIGEST; SPNEGO: $SPNEGO_COMMIT; recipe: $BUILD_RECIPE; published: ${PUBLISHED_CREATED:-never}"
+          export NGINX_DIGEST BUILD_RECIPE GHCR_LATEST_DIGEST DOCKERHUB_LATEST_DIGEST GHCR_STABLE_DIGEST DOCKERHUB_STABLE_DIGEST
+          export PUBLISHED_NGINX_DIGEST PUBLISHED_SPNEGO_COMMIT PUBLISHED_BUILD_RECIPE PUBLISHED_CREATED_EPOCH
           bash scripts/check-publish.sh
-          echo "NGINX base: $NGINX_DIGEST; SPNEGO: $SPNEGO_COMMIT"
 
       - name: Extract metadata (tags, labels) for Docker
         if: steps.decision.outputs.build == 'true'
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             ${{ env.GHCR_IMAGE }}
-            docker.io/${{ env.DOCKERHUB_IMAGE }}
+            ${{ env.DOCKERHUB_REF }}
           tags: |
             type=raw,value=latest
             type=raw,value=stable
 
       - name: Build and push Docker image
         if: steps.decision.outputs.build == 'true'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -117,36 +135,23 @@ jobs:
             NGINX_IMAGE=nginx:stable-alpine@${{ steps.decision.outputs.nginx_digest }}
             NGINX_BASE_DIGEST=${{ steps.decision.outputs.nginx_digest }}
             SPNEGO_COMMIT=${{ steps.spnego.outputs.commit }}
+            BUILD_RECIPE=${{ steps.decision.outputs.build_recipe }}
 
       - name: Add missing GHCR stable tag without rebuilding
         if: steps.decision.outputs.retag_ghcr == 'true'
-        run: docker buildx imagetools create --tag "${{ env.GHCR_IMAGE }}:stable" "${{ env.GHCR_IMAGE }}:latest"
+        run: docker buildx imagetools create --tag "$GHCR_IMAGE:stable" "$GHCR_IMAGE:latest"
 
       - name: Add missing Docker Hub stable tag without rebuilding
         if: steps.decision.outputs.retag_dockerhub == 'true'
-        run: docker buildx imagetools create --tag "docker.io/${{ env.DOCKERHUB_IMAGE }}:stable" "docker.io/${{ env.DOCKERHUB_IMAGE }}:latest"
+        run: docker buildx imagetools create --tag "$DOCKERHUB_REF:stable" "$DOCKERHUB_REF:latest"
 
   keep-schedule-active:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      actions: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Keep the schedule active in a quiet repository
-        run: |
-          set -euo pipefail
-          git fetch origin main
-          last_commit=$(git log -1 --format=%ct origin/main)
-          now=$(date -u +%s)
-          if (( now - last_commit < 45 * 86400 )); then
-            exit 0
-          fi
-
-          git switch -C main origin/main
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit --allow-empty -m 'Keep scheduled image builds active'
-          git push origin HEAD:main
+      - name: Re-enable the workflow so GitHub does not suspend the schedule for inactivity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PUT "repos/$GITHUB_REPOSITORY/actions/workflows/docker-build.yml/enable"

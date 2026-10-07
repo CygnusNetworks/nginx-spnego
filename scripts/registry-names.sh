@@ -7,4 +7,5 @@ username_lc=$(printf '%s' "$DOCKER_USERNAME" | tr '[:upper:]' '[:lower:]')
 {
   printf 'GHCR_IMAGE=ghcr.io/%s\n' "$repository_lc"
   printf 'DOCKERHUB_IMAGE=%s/%s\n' "$username_lc" "${repository_lc#*/}"
+  printf 'DOCKERHUB_REF=docker.io/%s/%s\n' "$username_lc" "${repository_lc#*/}"
 } >> "$GITHUB_ENV"

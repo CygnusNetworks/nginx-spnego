@@ -8,7 +8,7 @@ check() {
   local name=$1 expected=$2
   shift 2
   : > "$output"
-  env GITHUB_OUTPUT="$output" "$@" bash scripts/check-publish.sh
+  env GITHUB_OUTPUT="$output" "$@" bash scripts/check-publish.sh > /dev/null
   if [[ "$(<"$output")" != "$expected" ]]; then
     printf 'FAIL: %s\nExpected:\n%s\nActual:\n%s\n' "$name" "$expected" "$(<"$output")" >&2
     exit 1
@@ -25,6 +25,10 @@ common=(
   PUBLISHED_SPNEGO_COMMIT=new-release
   GHCR_STABLE_DIGEST=sha256:published
   DOCKERHUB_STABLE_DIGEST=sha256:published
+  BUILD_RECIPE=recipe
+  PUBLISHED_BUILD_RECIPE=recipe
+  NOW_EPOCH=1800000000
+  PUBLISHED_CREATED_EPOCH=1799000000
 )
 
 check 'unchanged upstream and complete tags skip publishing' \
@@ -38,6 +42,18 @@ check 'changed NGINX digest rebuilds' \
 check 'new SPNEGO release rebuilds' \
   $'build=true\nretag_ghcr=false\nretag_dockerhub=false' \
   "${common[@]}" PUBLISHED_SPNEGO_COMMIT=old-release
+
+check 'changed Dockerfile or workflow rebuilds' \
+  $'build=true\nretag_ghcr=false\nretag_dockerhub=false' \
+  "${common[@]}" PUBLISHED_BUILD_RECIPE=old-recipe
+
+check 'image older than 30 days rebuilds' \
+  $'build=true\nretag_ghcr=false\nretag_dockerhub=false' \
+  "${common[@]}" PUBLISHED_CREATED_EPOCH=1797000000
+
+check 'missing creation date rebuilds' \
+  $'build=true\nretag_ghcr=false\nretag_dockerhub=false' \
+  "${common[@]}" PUBLISHED_CREATED_EPOCH=
 
 check 'missing stable tag is copied without rebuilding' \
   $'build=false\nretag_ghcr=true\nretag_dockerhub=false' \
