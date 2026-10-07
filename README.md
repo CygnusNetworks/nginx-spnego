@@ -10,7 +10,7 @@ The image builds the SPNEGO module directly from [its source](https://github.com
 - Kerberos runtime libraries; build tools and source code are excluded from the final image
 
 #### Supported tags
-- `latest` (rebuilt daily from the current stable Alpine NGINX image and latest SPNEGO release)
+- `latest` and `stable` point to the same image. A daily check publishes a new build only when the official `nginx:stable-alpine` image digest or latest SPNEGO release changes. A missing or stale `stable` tag is updated from `latest` without rebuilding.
 
 To build locally, run `docker build -t nginx-spnego:local .`. The defaults use `nginx:stable-alpine` and the SPNEGO v1.1.3 source commit. To choose another compatible base or source revision, set `NGINX_IMAGE` and `SPNEGO_COMMIT`, for example:
 
@@ -27,6 +27,9 @@ docker build --build-arg NGINX_IMAGE=nginx:1.30.5-alpine \
 docker pull ghcr.io/cygnusnetworks/nginx-spnego:latest
 # or Docker Hub:
 docker pull cygnusnetworks/nginx-spnego:latest
+# The same image is also available under the stable tag:
+docker pull ghcr.io/cygnusnetworks/nginx-spnego:stable
+docker pull cygnusnetworks/nginx-spnego:stable
 ```
 
 2) Load the SPNEGO module in your `nginx.conf` and configure auth
@@ -75,10 +78,12 @@ Refer to the SPNEGO module documentation for additional directives such as `auth
 
 This repository includes a GitHub Actions workflow that:
 - Updates the Docker Hub description from this `README.md`
-- Resolves the latest SPNEGO release to a source commit, then builds and publishes the image daily at 03:17 UTC to GitHub Container Registry and Docker Hub
+- Checks the official `nginx:stable-alpine` image digest and latest SPNEGO release daily at 03:17 UTC; rebuilds and publishes to GitHub Container Registry and Docker Hub only when either upstream changes (or a `latest` tag is missing)
+- Records the NGINX base digest and SPNEGO source commit as image labels so subsequent checks can detect changes
 - Builds for `linux/amd64` and `linux/arm64` and checks that NGINX can load the compiled module before publishing
 - Adds an empty keepalive commit after 45 days without repository commits so GitHub does not disable scheduled builds for inactivity
-- Publishes the `latest` tag
+- Publishes the `latest` and `stable` tags for the same image; repairs a missing or outdated `stable` tag without rebuilding
+- Allows a manual rebuild via **Run workflow** with the `force` input, for example after changing the Dockerfile without an upstream update
 
 #### Credits
 Thanks to the [SPNEGO module maintainers](https://github.com/stnoonan/spnego-http-auth-nginx-module) and the [NGINX project](https://nginx.org/) for the upstream sources.

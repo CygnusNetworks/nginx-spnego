@@ -20,7 +20,9 @@ RUN set -eux; \
 
 FROM nginx-base
 ARG SPNEGO_COMMIT
+ARG NGINX_BASE_DIGEST
 LABEL org.cygnusnetworks.spnego-source-revision="${SPNEGO_COMMIT}"
+LABEL org.cygnusnetworks.nginx-base-digest="${NGINX_BASE_DIGEST}"
 
 RUN apk add --no-cache krb5-libs
 COPY --from=builder /tmp/nginx-src/objs/ngx_http_auth_spnego_module.so /usr/lib/nginx/modules/ngx_http_auth_spnego_module.so
